@@ -1,0 +1,279 @@
+---
+title: "Data Science Capstone - Milestone"
+author: "Michael Primm"
+date: "December 28, 2015"
+output: html_document
+---
+
+# Introduction
+
+This goal of this report is to present the preliminary results of my development of a natural language processing based system for prediction of words, based on patterns derived from a provided set of sample text data, including data from blogs, twitter, and news sites.
+
+This document will describe the results of my initial exploration of the provided data, results of that analysis, and their bearing on the planned prediction system.
+
+# Task 0: Understanding the problem
+
+The problem to be solved is to come up with a viable prediction system for predicting the next word to be entered by a user, given a prior sequence of one or more words.  The prediction will be based on a statistical analysis of N word sequences from a large body of real-world natual language text (in this case, in English).  The prediction will be based on the most frequently occurring **N+1** word, given the prior *N* word sequence.  The maximum value of *N* will likely be limited by practical memory and processing limitations, as well as likely diminishing returns on accuracy improvement for longer word sequences.
+
+The final algorithm is expected include most probably next word values for all distinct 1 through *N* word combinations from the training data, where lookup will start with attempting to match the number of words provided (limited to last *N* words).  If a match is found, the most frequent match is returned.  If no match is found, the match will be attempted with one less word.  This will be repeated until a match is found.
+
+# Task 1 : Data Acquisition and Cleaning
+
+First, I proceeded to set up a script for downloading and extracting the source data (coded so that the process is only done once, since the data is large and the process is time-consuming):
+
+```{r}
+options(java.parameters = "-Xmx8192m")
+dir.create("./data", showWarnings=FALSE)
+URL <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+if (!file.exists("./data/Coursera-SwiftKey.zip")) {
+  download.file(URL, destfile = "./data/Coursera-SwiftKey.zip", method="curl")
+}
+if (!file.exists("./data/final/en_US/en_US.blogs.txt")) {
+  unzip("./data/Coursera-SwiftKey.zip", exdir="./data")
+}
+```
+
+Also, as one of the requirements for the project is to include a profanity filter (so that our predictions don't recommend anything too inappropropriate, despite common profane word use).  ShutterStock has a file on GitHub for this purpose, found at http://github.com/shutterstock/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words :
+
+```{r}
+if (!file.exists("./data/profanity.txt")) {
+  download.file("https://raw.githubusercontent.com/shutterstock/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words/master/en", destfile="./data/profanity.txt", method="curl")
+}
+```
+
+Next, since we are interested in processing sentences, and the provided data includes records that often have more than one sentence per record, we need to start the cleansing process by reprocessing the files into one-sentence-per-line versus one-record-per-line format.  I used OpenNLP for the associated sentence detection, which turns out to be an expensive process.  Consequently, I coded the processing to also be done only once, with the new files only recomputed when they do not yet exist.  As the process is very compute intensive, it is run using the **parallel** package to do multicore execution:
+
+```{r message=FALSE}
+require(parallel)
+require(NLP)
+require(openNLP)
+lineToSentences <- function(s) {
+  s <- as.String(s)
+  s[annotate(s, sent_annotator)]
+}
+convertRecordsToSentences <- function(infile, outfile) {
+  cl <- makeCluster(mc <- getOption("cl.cores", 8))
+  clusterEvalQ(cl, {
+    require(openNLP)
+    require(NLP)
+    sent_annotator <- Maxent_Sent_Token_Annotator(language="en")
+  })
+  inp <- file(infile, "r", encoding="UTF-8")
+  outp <- gzfile(outfile, "wt+", encoding="UTF-8")
+  rslt <- ""
+  while(length(rslt) > 0) {
+    rslt <- readLines(inp, 10000, skipNul=TRUE)
+    v <- parLapply(cl, rslt, lineToSentences)
+    lines <- Reduce(c, v)
+    if (length(lines) > 0) {
+      writeLines(lines, outp)
+    }
+  }
+  close(inp)
+  close(outp)
+  stopCluster(cl)
+}
+if (!file.exists("./data/en_US.blogs.sentences.txt.gz")) {
+  convertRecordsToSentences("./data/final/en_US/en_US.blogs.txt", "./data/en_US.blogs.sentences.txt.gz")
+}
+if (!file.exists("./data/en_US.news.sentences.txt.gz")) {
+  convertRecordsToSentences("./data/final/en_US/en_US.news.txt", "./data/en_US.news.sentences.txt.gz")
+}
+if (!file.exists("./data/en_US.twitter.sentences.txt.gz")) {
+  convertRecordsToSentences("./data/final/en_US/en_US.twitter.txt", "./data/en_US.twitter.sentences.txt.gz")
+}
+```
+
+The next step is to produce a corpus for each data source.  Due to the size of the supplied data, I opted to produce a random sample of the sentences from each data source (currently, 5% of the data):
+
+```{r cache=TRUE}
+samplePercent <- 5.0
+
+blogSentence <- readLines("./data/en_US.blogs.sentences.txt.gz", encoding="UTF-8")
+newsSentence <- readLines("./data/en_US.news.sentences.txt.gz", encoding="UTF-8")
+tweetSentence <- readLines("./data/en_US.twitter.sentences.txt.gz", encoding="UTF-8")
+  
+set.seed(123456)
+blogSample <- sample(blogSentence, as.integer(length(blogSentence) * 0.01 * samplePercent))
+newsSample <- sample(newsSentence, as.integer(length(newsSentence) * 0.01 * samplePercent))
+tweetSample <- sample(tweetSentence, as.integer(length(tweetSentence) * 0.01 * samplePercent))
+```
+
+Finally, a corpus of the sentence samples is produced, by doing the following:
+
+- Making all text lower case
+- Removing all punctuation
+- Removing all numbers (no reasonable expectation of these being predictable or helping prediction)
+- Stripping extra whitespace (so that only one space between words)
+- Remove all profanity (which can include multi-word profanity, which is why it is after whitespace)
+- Stripping extra whitespace a second time (in case removed profanity leaves extra spaces)
+
+```{r cache=TRUE, message=FALSE}
+require(tm)
+require(RWeka)
+options(mc.cores=1)
+
+profanity <- readLines("./data/profanity.txt")
+boguschars <- c("\u0092", "\u0093", "\u0094", "\u0095", "\u0096", "\u0097")
+
+makeCorpus <- function(dataset, dsname) {
+  corpus <- VCorpus(VectorSource(dataset))
+  corpus <- tm_map(corpus, content_transformer(tolower)) # Make all lower case
+  corpus <- tm_map(corpus, removePunctuation) # Remove punctuation
+  corpus <- tm_map(corpus, removeNumbers) # Remove numbers
+  corpus <- tm_map(corpus, stripWhitespace) # Remove extra whitespace
+  corpus <- tm_map(corpus, removeWords, profanity) # Remove profanity
+  corpus <- tm_map(corpus, removeWords, boguschars) # Remove bogus characters
+  corpus <- tm_map(corpus, stripWhitespace) # Remove extra whitespace (in case extra from profanity filter)
+  unlist(lapply(corpus, "[", "content"), use.names=FALSE)
+}
+blogsCorpus <- makeCorpus(blogSample)
+newsCorpus <- makeCorpus(newsSample)
+tweetCorpus <- makeCorpus(tweetSample)
+```
+
+# Task 2 : Data Exploration
+
+The raw data to be processed is quite huge:
+
+```{r cache=TRUE}
+files <- data.frame(FileName=c("./data/final/en_US/en_US.blogs.txt", "./data/final/en_US/en_US.news.txt", "./data/final/en_US/en_US.twitter.txt"), stringsAsFactors=FALSE)
+files$SizeInMB <- file.size(files$FileName) / 1024.0 / 1024.0
+files$Lines <- sapply(files$FileName, function(f) length(readLines(f, encoding="UTF-8", skipNul=TRUE)))
+files$Sentences <- c(length(blogSentence), length(newsSentence), length(tweetSentence))
+files$Words <- c(sum(sapply(strsplit(blogSentence, " "),length)),sum(sapply(strsplit(newsSentence, " "),length)),sum(sapply(strsplit(tweetSentence, " "),length)))
+files
+```
+
+Consequently, our corpus derived from a 5% sample is also quite significant, and should represent the data reasonably well:
+
+```{r cache=TRUE}
+samples <- data.frame(FileName=c("./data/final/en_US/en_US.blogs.txt", "./data/final/en_US/en_US.news.txt", "./data/final/en_US/en_US.twitter.txt"), stringsAsFactors=FALSE)
+samples$Sentences <- c(length(blogsCorpus), length(newsCorpus), length(tweetCorpus))
+samples$Words <- c(sum(sapply(strsplit(blogsCorpus, " "),length)),sum(sapply(strsplit(newsCorpus, " "),length)),sum(sapply(strsplit(tweetCorpus, " "),length)))
+samples$WordsPerSentence = samples$Words / samples$Sentences
+samples
+```
+
+To further analyse the sampled sentences, I generated N-gram data and frequencies for 1-grams (single words) through 5-grams (5 word sequences):
+
+```{r cache=TRUE}
+buildNGramFrequency <- function(dataset, n) {
+  if (n == 1) {
+    tokens <- WordTokenizer(dataset)
+  } else {
+    tokens <- NGramTokenizer(dataset, Weka_control(min = n, max = n))
+  }
+  f <- data.frame(table(tokens))
+  fsort <- f[order(f$Freq, decreasing=TRUE),]
+  fsort
+}
+build1ToNGramFrequency <- function(dataset, n) {
+  rslt <- lapply(1:n, function(i) buildNGramFrequency(dataset, i))
+  names(rslt) <- paste0(1:n, "-Gram")
+  rslt
+}
+blogsFreq <- build1ToNGramFrequency(blogsCorpus, 5)
+newsFreq <- build1ToNGramFrequency(newsCorpus, 5)
+tweetFreq <- build1ToNGramFrequency(tweetCorpus, 5)
+combinedFreq <- build1ToNGramFrequency(c(blogsCorpus, newsCorpus, tweetCorpus), 5)
+```
+
+Looking at single words, the highest frequency words for the 3 data sources are quite consistent - which is not surprising:
+
+```{r message=FALSE}
+require(ggplot2)
+require(gridExtra)
+ggplot(blogsFreq$`1-Gram`[1:30,], aes(x=reorder(tokens,order(Freq,decreasing=TRUE)),y=Freq)) +          geom_bar(stat="identity", fill="cyan") + ylab("Frequency") + xlab("Words") + 
+         ggtitle("Top Word Frequency (Blogs)") + theme(axis.text.x=element_text(angle=45,size=12,hjust=1))
+```
+
+```{r message=FALSE}
+ggplot(newsFreq$`1-Gram`[1:30,], aes(x=reorder(tokens,order(Freq,decreasing=TRUE)),y=Freq)) +          geom_bar(stat="identity", fill="cyan") + ylab("Frequency") + xlab("Words") +
+        ggtitle("Top Word Frequency (News)") + theme(axis.text.x=element_text(angle=45,size=12,hjust=1))
+```
+
+```{r message=FALSE}
+ggplot(tweetFreq$`1-Gram`[1:30,], aes(x=reorder(tokens,order(Freq,decreasing=TRUE)),y=Freq)) +         geom_bar(stat="identity", fill="cyan") + ylab("Frequency") + xlab("Words") + 
+        ggtitle("Top Word Frequency (Tweets)") + theme(axis.text.x=element_text(angle=45,size=12,hjust=1))
+```
+
+```{r message=FALSE}
+ggplot(combinedFreq$`1-Gram`[1:30,], aes(x=reorder(tokens,order(Freq,decreasing=TRUE)),y=Freq)) +         geom_bar(stat="identity", fill="cyan") + ylab("Frequency") + xlab("Words") + 
+        ggtitle("Top Word Frequency (Combined)") + theme(axis.text.x=element_text(angle=45,size=12,hjust=1))
+```
+
+Many of these words are sometimes referred to as *stopwords* which, for most NLP, are low impact (when it comes to importance and meaning) - they have not been stripped out because our ultimate goal is prediction based on word patterns, versus interpreting meaning, and these common words will be a part of most non-trival word sequences (as is shown by their frequency).
+
+Removing the common *stopwords* yields the following word frequencies (with more diversity shown):
+
+```{r message=FALSE}
+require(tm)
+data <- blogsFreq$`1-Gram`[!(blogsFreq$`1-Gram`$tokens %in% stopwords("en")),]
+ggplot(data[1:30,], aes(x=reorder(tokens,order(Freq,decreasing=TRUE)),y=Freq)) +          geom_bar(stat="identity", fill="cyan") + ylab("Frequency") + xlab("Words") + 
+         ggtitle("Top Non-Stopword Frequency (Blogs)") + theme(axis.text.x=element_text(angle=45,size=12,hjust=1))
+```
+
+```{r message=FALSE}
+data <- newsFreq$`1-Gram`[!(newsFreq$`1-Gram`$tokens %in% stopwords("en")),]
+ggplot(data[1:30,], aes(x=reorder(tokens,order(Freq,decreasing=TRUE)),y=Freq)) +          geom_bar(stat="identity", fill="cyan") + ylab("Frequency") + xlab("Words") + 
+         ggtitle("Top Non-Stopword Frequency (News)") + theme(axis.text.x=element_text(angle=45,size=12,hjust=1))
+```
+
+```{r message=FALSE}
+data <- tweetFreq$`1-Gram`[!(tweetFreq$`1-Gram`$tokens %in% stopwords("en")),]
+ggplot(data[1:30,], aes(x=reorder(tokens,order(Freq,decreasing=TRUE)),y=Freq)) +          geom_bar(stat="identity", fill="cyan") + ylab("Frequency") + xlab("Words") + 
+         ggtitle("Top Non-Stopword Frequency (Tweets)") + theme(axis.text.x=element_text(angle=45,size=12,hjust=1))
+```
+
+```{r message=FALSE}
+data <- combinedFreq$`1-Gram`[!(combinedFreq$`1-Gram`$tokens %in% stopwords("en")),]
+ggplot(data[1:30,], aes(x=reorder(tokens,order(Freq,decreasing=TRUE)),y=Freq)) +          geom_bar(stat="identity", fill="cyan") + ylab("Frequency") + xlab("Words") + 
+         ggtitle("Top Non-Stopword Frequency (Combined)") + theme(axis.text.x=element_text(angle=45,size=12,hjust=1))
+```
+
+Moving on to the N-grams, which will ultimately (for N > 1) be used for prediction, I investigated the following notion: an n-Gram (with n > 1) will ultimately be used to help predict the last word of that N-gram, given a match with the corresponding (n-1)-Gram (e.g. the 3-gram "this is it" will be used to help predict the word "it" occurring after the 2-gram "this is").  Given this, the ratio of the number of N-grams to the number of (N-1)-grams, for N > 1, is a reasonable indicator as to how successful predictions of the next word will be, given (N-1) previous words.
+
+To show this, I plotted the following:
+
+```{r}
+data <- data.frame(N = 1:5, NumBlogs = sapply(blogsFreq, nrow), NumNews = sapply(newsFreq, nrow), NumTweets = sapply(tweetFreq, nrow), NumCombined = sapply(combinedFreq, nrow))
+data$BlogsRatio <- c(NA, data[1:4,]$NumBlogs / data[2:5,]$NumBlogs)
+data$NewsRatio <- c(NA, data[1:4,]$NumNews / data[2:5,]$NumNews)
+data$TweetsRatio <- c(NA, data[1:4,]$NumTweets / data[2:5,]$NumTweets)
+data$CombinedRatio <- c(NA, data[1:4,]$NumCombined / data[2:5,]$NumCombined)
+
+ggplot(data[2:5,], aes(colour="Sample")) + geom_line(aes(x=N, y=BlogsRatio, colour="Blogs"), size=1) + geom_line(aes(x=N, y=NewsRatio, colour="News"), size=1) + geom_line(aes(x=N, y=TweetsRatio, colour="Tweets"), size=1) + 
+  geom_line(aes(x=N, y=CombinedRatio, colour="Combined"), size=2) + xlab("N-Gram") + ylab("Population Ratio (N-1 / N)") + ggtitle("N-Gram Population Ratio (N-1 to N)")
+```
+
+The important observation here is that, for N > 3, the ratio of distinct N-grams produced from our sample populations is above 0.9.  This implies that, given a prediction model based on 4-grams (3 previous words and 1 to-be-predicted word) or longer, there is reason to expect good accuracy (as most 4-grams will only have one associated 3-gram).  At N=5, the ratio actually exceeds 1.0 (implying that the 5-gram population has less diversity than the 4-gram) - this is particularly true for *tweets", and is indicative of the fact that a given sample sentence will contribute 1 less N-gram than it did (N-1)-grams (due to having a finite number of words), and that *tweets* are shorter than sentences from *blogs* and *news*.
+
+The graph also indicates that prediction accuracy, given less than 3 previous words (N < 4) is likely to be questionable (unless one of the multiple successor words for a given (N-1)-gram is much more frequent than the others).
+
+Finally, looking at the relative density of the frequency distribution for the combined sample set, as a function of N in the N-grams, shows:
+
+```{r}
+cnt <- 1:20000
+data <- data.frame()
+data <- rbind(data, data.frame(Freq = combinedFreq$`1-Gram`[cnt,]$Freq, N = 1, Index = cnt))
+data <- rbind(data, data.frame(Freq = combinedFreq$`2-Gram`[cnt,]$Freq, N = 2, Index = cnt))
+data <- rbind(data, data.frame(Freq = combinedFreq$`3-Gram`[cnt,]$Freq, N = 3, Index = cnt))
+data <- rbind(data, data.frame(Freq = combinedFreq$`4-Gram`[cnt,]$Freq, N = 4, Index = cnt))
+data <- rbind(data, data.frame(Freq = combinedFreq$`5-Gram`[cnt,]$Freq, N = 5, Index = cnt))
+data$N <- factor(data$N)
+ggplot(data, aes(x=Index, y=Freq, group=N, colour=N)) + geom_line() + xlab("N-Grams (highest to lowest frequency") + 
+  ylab("Frequency") + ggtitle("Frequency versus N") + scale_y_log10()
+```
+
+This plot shows, for the combined sample data, the sorted graph of the `r length(cnt)` highest frequency N-grams for N=1 to 5.  What this graph shows is how rapidly relative frequency of N-grams flattens out, as N increases, showing how nearly all N-grams (with very few exceptions) are for higher N value (N > 3) nearly equal in frequency - suggesting good detection power.
+
+# Future Work
+The initial results are promising for producing an N-gram based predictive model.  The additional actions called for include:
+
+- Confirm predictive power of N-gram model (with N > 3), particularly with larger sample set
+- Produce model allowing effocient representation of N-gram data model, so that fallback scanning can be done when full N-1 previous words not present
+- Tune model, and store results persistently, so that Shiny application has minimum work when starting
+- Code up Shiny application
+- Generate slide presentation for final product
+

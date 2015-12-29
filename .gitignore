@@ -1,0 +1,9 @@
+.Rproj.user
+.Rhistory
+.RData
+data
+rsconnect
+MilestoneReport_files
+MilestoneReport_cache
+MilestoneReport.html
+.DS_Store
