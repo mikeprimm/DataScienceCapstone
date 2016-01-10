@@ -19,6 +19,12 @@ build1ToNGramFrequency <- function(dataset, n) {
   names(rslt) <- paste0(1:n, "-Gram")
   rslt
 }
-blogsFreq <- build1ToNGramFrequency(blogsCorpus, 5)
-newsFreq <- build1ToNGramFrequency(newsCorpus, 5)
-tweetFreq <- build1ToNGramFrequency(tweetCorpus, 5)
+if (!file.exists("./data/en_US.freq.RData")) {
+  blogsFreq <- build1ToNGramFrequency(blogsCorpus, 5)
+  newsFreq <- build1ToNGramFrequency(newsCorpus, 5)
+  tweetFreq <- build1ToNGramFrequency(tweetCorpus, 5)
+  combinedFreq <- build1ToNGramFrequency(c(tweetCorpus, newsCorpus, blogsCorpus), 5)
+  save(blogsFreq, newsFreq, tweetFreq, combinedFreq, file="./data/en_US.freq.RData")
+} else {
+  load("./data/en_US.freq.RData")
+}
