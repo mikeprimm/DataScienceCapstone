@@ -5,25 +5,25 @@ require(openNLP)
 require(tm)
 require(RWeka)
 options(mc.cores=1)
-boguschars <- c("\u0092", "\u0093", "\u0094", "\u0095", "\u0096", "\u0097")
 profanity <- readLines("./data/profanity.txt")
 
 # Build tokenized version of each sentence
 tokenizeSentence <- function(dataset) {
-  corpus <- VCorpus(VectorSource(dataset))
-  corpus <- tm_map(corpus, content_transformer(tolower)) # Make all lower case
-  corpus <- tm_map(corpus, removePunctuation, preserve_intra_word_dashes = FALSE) # Remove punctuation
-  corpus <- tm_map(corpus, removeNumbers) # Remove numbers
-  corpus <- tm_map(corpus, removeWords, profanity) # Remove profanity
-  corpus <- tm_map(corpus, removeWords, boguschars) # Remove bogus characters
-  corpus <- tm_map(corpus, stripWhitespace) # Remove extra whitespace
-  v <- trimws(unlist(lapply(corpus, "[", "content"), use.names=FALSE)) # Grab version with stop words
-  corpus <- tm_map(corpus, removeWords, stopwords("english")) # Remove stop worlds
-  corpus <- tm_map(corpus, stripWhitespace)
-  v2 <- trimws(unlist(lapply(corpus, "[", "content"), use.names=FALSE)) # Grab version without stemming
-  corpus <- tm_map(corpus, stemDocument, language = "english") # Stem words
-  corpus <- tm_map(corpus, stripWhitespace)
-  paste(v, v2, trimws(unlist(lapply(corpus, "[", "content"), use.names=FALSE)), sep=":")
+  dataset <- tolower(dataset) # Make all lower case
+  dataset <- gsub("[0-9'’\u0092\u0093\u0094\u0095\u0096\u0097]", "", dataset) # Remove bogus characters and numbers and apostrophes
+  dataset <- gsub("[[:punct:][:space:]]", " ", dataset) # Replace punctuation with space (avoid making new words - we are stripping numbers anyway)
+  dataset <- removeWords(dataset, profanity) # Remove profanity
+  dataset <- stripWhitespace(dataset) # Remove extra whitespace
+  dataset <- trimws(dataset) # Trim leading/trailing ws
+  v <- dataset # Grab copy before stopwords
+  dataset <- removeWords(dataset, stopwords("english")) # Remove stop words
+  dataset <- stripWhitespace(dataset) # Remove extra whitespace
+  dataset <- trimws(dataset) # Trim leading/trailing ws
+  v2 <- dataset # Grab version without stemming
+  dataset <- stemDocument(dataset, language="english") # Stem words
+  dataset <- stripWhitespace(dataset) # Remove extra whitespace
+  dataset <- trimws(dataset) # Trim leading/trailing ws
+  paste(v, v2, dataset, sep=":")
 }
 
 tokenizeSentences <- function(infile, outfile) {
@@ -32,7 +32,6 @@ tokenizeSentences <- function(infile, outfile) {
     require(tm)
     require(RWeka)
     options(mc.cores=1)
-    boguschars <- c("\u0092", "\u0093", "\u0094", "\u0095", "\u0096", "\u0097")
     profanity <- readLines("./data/profanity.txt")
   })
   inp <- file(infile, "r", encoding="UTF-8")
@@ -49,7 +48,7 @@ tokenizeSentences <- function(infile, outfile) {
     }
     cnt <- cnt + length(rslt)
     cntout <- cntout + length(lines)
-    print(paste("Processed", cnt, "lines, ", cntout, "written"))
+    print(paste(Sys.time(),"Processed", cnt, "lines, ", cntout, "written"))
   }
   close(inp)
   close(outp)
