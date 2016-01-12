@@ -39,7 +39,7 @@ addToFrequencyList <- function(ngram, predict, n) {
 
 processTokenLine <- function(poststem, stemdict) {
   # Get N-grams for post-stem line and build predictions
-  ng <- ngrams(poststem, 5)
+  ng <- ngrams(poststem, 2:5)
   if(length(ng) > 0) {
     n <- vapply(ng, length, 0)
     predict <- mapply(function(f, nn) { f[nn] }, ng, n) # Get last words of ngrams
