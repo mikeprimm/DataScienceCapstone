@@ -10,7 +10,7 @@ profanity <- readLines("./data/profanity.txt")
 # Build tokenized version of each sentence
 tokenizeSentence <- function(dataset) {
   dataset <- tolower(dataset) # Make all lower case
-  dataset <- gsub("[0-9'’\u0092\u0093\u0094\u0095\u0096\u0097]", "", dataset) # Remove bogus characters and numbers and apostrophes
+  dataset <- gsub("[0-9'’\u0080-\uFFFF]", "", dataset) # Remove non-latin characters and numbers and apostrophes
   dataset <- gsub("[[:punct:][:space:]]", " ", dataset) # Replace punctuation with space (avoid making new words - we are stripping numbers anyway)
   dataset <- removeWords(dataset, profanity) # Remove profanity
   dataset <- stripWhitespace(dataset) # Remove extra whitespace

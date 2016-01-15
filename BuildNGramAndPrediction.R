@@ -96,7 +96,19 @@ if(!file.exists("./data/freqTable.RData")) {
   rm(Word1)
   rm(Predict)
   rm(Freq)
+  setkey(freqTable, Word4, Word3, Word2, Word1, Predict)
   save(freqTable, UniqueWords, file="./data/freqTable.RData", compress=TRUE)
 } else {
   load("./data/freqTable.RData")
+}
+
+# Build SQLite prediction table DB
+if (!file.exists("./data/freqTable.db")) {
+  require(RSQLite)
+  db <- dbConnect(SQLite(), "./data/freqTable.db")
+  dbGetQuery(db, "CREATE TABLE UniqueWords (Word TEXT, Ind INT, PRIMARY KEY (Word))")
+  dbGetQuery(db, "CREATE TABLE freqTable (Word4 INT, Word3 INT, Word2 INT, Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word4,Word3,Word2,Word1,Predict))")
+  dbWriteTable(db, "UniqueWords", data.table(Word=UniqueWords,Ind=c(1:length(UniqueWords))), append=TRUE)
+  dbWriteTable(db, "freqTable", freqTable, append=TRUE)
+  dbDisconnect(db)
 }
