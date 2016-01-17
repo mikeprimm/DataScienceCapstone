@@ -112,3 +112,7 @@ if (!file.exists("./data/freqTable.db")) {
   dbWriteTable(db, "freqTable", freqTable, append=TRUE)
   dbDisconnect(db)
 }
+if (!file.exists("./data/freqTable.db.gz")) {
+  require(R.utils)
+  gzip("./data/freqTable.db", destname="./data/freqTable.db.gz", remove=FALSE)
+}
