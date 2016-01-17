@@ -51,9 +51,10 @@ tokenizeSentence <- function(dataset) {
   dataset <- stripWhitespace(dataset) # Remove extra whitespace
   dataset <- trimws(dataset) # Trim leading/trailing ws
   v <- dataset # Grab copy before stopwords
-  dataset <- removeWords(dataset, stopwords("english")) # Remove stop words
-  dataset <- stripWhitespace(dataset) # Remove extra whitespace
-  dataset <- trimws(dataset) # Trim leading/trailing ws
+  ### Don't drop these - way too much prediction breaks
+  #dataset <- removeWords(dataset, stopwords("english")) # Remove stop words
+  #dataset <- stripWhitespace(dataset) # Remove extra whitespace
+  #dataset <- trimws(dataset) # Trim leading/trailing ws
   v2 <- dataset # Grab version without stemming
   dataset <- stemDocument(dataset, language="english") # Stem words
   dataset <- stripWhitespace(dataset) # Remove extra whitespace
