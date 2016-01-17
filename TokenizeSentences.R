@@ -10,21 +10,16 @@ profanity <- readLines("./data/profanity.txt")
 # Build tokenized version of each sentence
 tokenizeSentence <- function(dataset) {
   dataset <- tolower(dataset) # Make all lower case
-  dataset <- gsub("[0-9'’\u0080-\uFFFF]", "", dataset) # Remove non-latin characters and numbers and apostrophes
-  dataset <- gsub("[[:punct:][:space:]]", " ", dataset) # Replace punctuation with space (avoid making new words - we are stripping numbers anyway)
+  dataset <- gsub("[0-9'’`\u0080-\uFFFF]", "", dataset) # Remove non-latin characters and numbers and apostrophes
+  dataset <- gsub("[[:punct:][:space:][:cntrl:]]", " ", dataset) # Replace punctuation with space (avoid making new words - we are stripping numbers anyway)
   dataset <- removeWords(dataset, profanity) # Remove profanity
   dataset <- stripWhitespace(dataset) # Remove extra whitespace
   dataset <- trimws(dataset) # Trim leading/trailing ws
-  v <- dataset # Grab copy before stopwords
-  ### Don't drop these - way too much prediction breaks
-  #dataset <- removeWords(dataset, stopwords("english")) # Remove stop words
-  #dataset <- stripWhitespace(dataset) # Remove extra whitespace
-  #dataset <- trimws(dataset) # Trim leading/trailing ws
-  v2 <- dataset # Grab version without stemming
+  v <- dataset # Grab version without stemming
   dataset <- stemDocument(dataset, language="english") # Stem words
   dataset <- stripWhitespace(dataset) # Remove extra whitespace
   dataset <- trimws(dataset) # Trim leading/trailing ws
-  paste(v, v2, dataset, sep=":")
+  paste(v, dataset, sep=":")
 }
 
 tokenizeSentences <- function(infile, outfile) {

@@ -8,10 +8,15 @@ shinyUI(
         titlePanel("NLP-based Word Prediction Project"),
         sidebarLayout(
             sidebarPanel(
-                textInput("text", "Input Text:", value = "")
+                textInput("text", "Input Text:", value = ""),
+                h3("Prediction (top):", textOutput("Prediction")),
+                conditionalPanel(condition = "(output.Prediction2 != '')",
+                                 h3("Prediction (second):", textOutput("Prediction2"))),
+                conditionalPanel(condition = "(output.Prediction3 != '')",
+                                 h3("Prediction (third):", textOutput("Prediction3")))
             ),
             mainPanel(
-                h3("Prediction:", textOutput("Prediction"))
+                plotOutput("WordCloud")
             )
         ) 
     )

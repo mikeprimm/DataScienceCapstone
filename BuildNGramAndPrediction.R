@@ -1,3 +1,4 @@
+source("./TokenizeSentences.R")
 
 require(tm)
 require(NLP)
@@ -37,8 +38,8 @@ processTokenLine <- function(poststem, stemdict) {
 
 processLines <- function(line) {
   parts <- strsplit(line, ":", fixed=TRUE)[[1]] # Split parts (1=sentence, 2=after stopwords, 3=after stem)
-  stemdict <- strsplit(parts[2], " ", fixed=TRUE)[[1]] # Make stem completion dictionary from post stopwords
-  poststem <- strsplit(parts[3], " ", fixed=TRUE)[[1]] # Start with post-stem line
+  stemdict <- strsplit(parts[1], " ", fixed=TRUE)[[1]] # Make stem completion dictionary from post stopwords
+  poststem <- strsplit(parts[2], " ", fixed=TRUE)[[1]] # Start with post-stem line
   processTokenLine(poststem, stemdict)
 }
 
@@ -84,11 +85,11 @@ if(!file.exists("./data/freqTable.RData")) {
   rm(Ngrams)
   rm(ftable)
   UniqueWords <- sort(unique(c(Word4,Word3,Word2,Word1,Predict)))
-  Word4 <- as.numeric(factor(Word4, UniqueWords))
-  Word3 <- as.numeric(factor(Word3, UniqueWords))
-  Word2 <- as.numeric(factor(Word2, UniqueWords))
-  Word1 <- as.numeric(factor(Word1, UniqueWords))
-  Predict <- as.numeric(factor(Predict, UniqueWords))
+  Word4 <- as.integer(factor(Word4, UniqueWords))
+  Word3 <- as.integer(factor(Word3, UniqueWords))
+  Word2 <- as.integer(factor(Word2, UniqueWords))
+  Word1 <- as.integer(factor(Word1, UniqueWords))
+  Predict <- as.integer(factor(Predict, UniqueWords))
   freqTable <- data.table(Word4 = Word4, Word3 = Word3, Word2 = Word2, Word1 = Word1, Predict = Predict, Freq = Freq)
   rm(Word4)
   rm(Word3)

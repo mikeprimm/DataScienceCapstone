@@ -53,8 +53,8 @@ processTokenLine <- function(poststem, stemdict) {
 
 processLines <- function(line) {
   parts <- strsplit(line, ":", fixed=TRUE)[[1]] # Split parts (1=sentence, 2=after stopwords, 3=after stem)
-  stemdict <- strsplit(parts[2], " ", fixed=TRUE)[[1]] # Make stem completion dictionary from post stopwords
-  poststem <- strsplit(parts[3], " ", fixed=TRUE)[[1]] # Start with post-stem line
+  stemdict <- strsplit(parts[1], " ", fixed=TRUE)[[1]] # Make stem completion dictionary from post stopwords
+  poststem <- strsplit(parts[2], " ", fixed=TRUE)[[1]] # Start with post-stem line
   processTokenLine(poststem, stemdict)
 }
 
@@ -72,26 +72,6 @@ processTokenFile <- function(parlist, infile) {
   }
   close(inp)
 }
-
-#buildUniqueWordList <- function(infile) {
-#  print(paste(Sys.time(), "Processing unique words from", infile))
-#  inp <- file(infile, "r", encoding="UTF-8")
-#  cnt <- 0
-#  rslt <- ""
-#  env <- new.env(hash = TRUE, parent = emptyenv(), size = 200000)
-#  while(length(rslt) > 0) {
-#    rslt <- readLines(inp, 20000, skipNul=TRUE)
-#    parts <- strsplit(rslt, ":", fixed=TRUE) # Split parts (1=sentence, 2=after stopwords, 3=after stem)
-#    stemdict <- lapply(parts, function(f) { strsplit(f[2], " ", fixed=TRUE)[[1]] }) # Make stem completion dictionary from post stopwords
-#    poststem <- lapply(parts, function(f) { strsplit(f[3], " ", fixed=TRUE)[[1]] }) # Start with post-stem line
-#    lapply(stemdict, function(f) { vapply(f, function(ff) { env[[ff]] <- TRUE; ff }, "") })
-#    lapply(poststem, function(f) { vapply(f, function(ff) { env[[ff]] <- TRUE; ff }, "") })
-#    cnt <- cnt + length(rslt)
-#    print(paste(Sys.time(), "Processed", cnt, "lines"))
-#  }
-#  close(inp)
-#  names(env)
-#}  
 
 # Startup cluster
 cl <- makeCluster(mc <- getOption("cl.cores", workerCount), outfile="")
