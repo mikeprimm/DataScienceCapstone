@@ -26,16 +26,9 @@ tokenizeSentence <- function(dataset) {
   dataset <- removeWords(dataset, profanity) # Remove profanity
   dataset <- stripWhitespace(dataset) # Remove extra whitespace
   dataset <- trimws(dataset) # Trim leading/trailing ws
-  v <- dataset # Grab copy before stopwords
-  ### Don't drop these - way too much prediction breaks
-  #dataset <- removeWords(dataset, stopwords("english")) # Remove stop words
-  #dataset <- stripWhitespace(dataset) # Remove extra whitespace
-  #dataset <- trimws(dataset) # Trim leading/trailing ws
-  v2 <- dataset # Grab version without stemming
   dataset <- stemDocument(dataset, language="english") # Stem words
   dataset <- stripWhitespace(dataset) # Remove extra whitespace
   dataset <- trimws(dataset) # Trim leading/trailing ws
-  #paste(v, v2, dataset, sep=":")
   dataset
 }
 
@@ -67,28 +60,28 @@ doPrediction <- function(tokens) {
   idx <- rev(lookupWord(db, tokens))
   predict <- NULL
   if (length(idx) >= 4) {
-      v <- dbGetPreparedQuery(db, "SELECT Predict, sum(Freq) from freqTable WHERE Word4=? AND Word3=? AND Word2=? AND Word1=? GROUP BY Predict ORDER BY sum(Freq) DESC LIMIT 20", data.frame(x=idx[[1]],y=idx[[2]],z=idx[[3]],zz=idx[[4]]))
+      v <- dbGetPreparedQuery(db, "SELECT Predict, Freq from freqTable4 WHERE Word4=? AND Word3=? AND Word2=? AND Word1=? ORDER BY Freq DESC LIMIT 20", data.frame(x=idx[[1]],y=idx[[2]],z=idx[[3]],zz=idx[[4]]))
       predict <- findPredict(db, v)
-      #print(paste("pred4:", tokens, rev(idx)))
-      #print(predict)
+      print(paste("pred4:", tokens, rev(idx)))
+      print(predict)
   }
   if (is.null(predict) && (length(idx) >= 3)) {
-      v <- dbGetPreparedQuery(db, "SELECT Predict, sum(Freq) from freqTable WHERE Word4=? AND Word3=? AND Word2=? GROUP BY Predict ORDER BY sum(Freq) DESC LIMIT 20", data.frame(x=idx[[1]],y=idx[[2]],z=idx[[3]]))
+      v <- dbGetPreparedQuery(db, "SELECT Predict, Freq from freqTable3 WHERE Word3=? AND Word2=? AND Word1=? ORDER BY Freq DESC LIMIT 20", data.frame(x=idx[[1]],y=idx[[2]],z=idx[[3]]))
       predict <- findPredict(db, v)
-      #print(paste("pred3:", tokens, rev(idx)))
-      #print(predict)
+      print(paste("pred3:", tokens, rev(idx)))
+      print(predict)
   }
   if (is.null(predict) && (length(idx) >= 2)) {
-      v <- dbGetPreparedQuery(db, "SELECT Predict, sum(Freq) from freqTable WHERE Word4=? AND Word3=? GROUP BY Predict ORDER BY sum(Freq) DESC LIMIT 20", data.frame(x=idx[[1]],y=idx[[2]]))
+      v <- dbGetPreparedQuery(db, "SELECT Predict, Freq from freqTable2 WHERE Word2=? AND Word1=? ORDER BY Freq DESC LIMIT 20", data.frame(x=idx[[1]],y=idx[[2]]))
       predict <- findPredict(db, v)
-      #print(paste("pred2:", tokens, rev(idx)))
-      #print(predict)
+      print(paste("pred2:", tokens, rev(idx)))
+      print(predict)
   }
   if (is.null(predict) && (length(idx) >= 1)) {
-      v <- dbGetPreparedQuery(db, "SELECT Predict, sum(Freq) from freqTable WHERE Word4=? GROUP BY Predict ORDER BY sum(Freq) DESC LIMIT 20", data.frame(x=idx[[1]]))
+      v <- dbGetPreparedQuery(db, "SELECT Predict, Freq from freqTable1 WHERE Word1=? ORDER BY Freq DESC LIMIT 20", data.frame(x=idx[[1]]))
       predict <- findPredict(db, v)
-      #print(paste("pred1:", tokens, rev(idx)))
-      #print(predict)
+      print(paste("pred1:", tokens, rev(idx)))
+      print(predict)
   }
   dbDisconnect(db)
   predict
@@ -99,7 +92,7 @@ shinyServer(function(input, output) {
   prediction <- reactive({
         sentences <- lineToSentences(input$text)
         #print(sentences)
-        predict = data.frame("sum(Freq)"=0,Predict=-1,PredictWord="<no prediction>", stringsAsFactors = FALSE)
+        predict = data.frame(Freq=0,Predict=-1,PredictWord="<no prediction>", stringsAsFactors = FALSE)
         scnt <- length(sentences)
         #print(scnt)
         if (scnt >= 1) {
@@ -119,7 +112,7 @@ shinyServer(function(input, output) {
     })     
     output$Prediction <- renderText({
       p <- prediction()
-      #print(p)
+      print(p)
       p$PredictWord[[1]]
     })
     output$Prediction2 <- renderText({
@@ -135,14 +128,15 @@ shinyServer(function(input, output) {
     outputOptions(output, "Prediction2", suspendWhenHidden=FALSE)    
     outputOptions(output, "Prediction3", suspendWhenHidden=FALSE)    
 
-    wordcloud_rep <- repeatable(wordcloud)
+    #wordcloud_rep <- repeatable(wordcloud)
     
     output$WordCloud <- renderPlot({
       p <- prediction()
-      if (p$Predict[[1]] >= 0) {
-        wordcloud_rep(p$PredictWord, p$"sum(Freq)", colors=brewer.pal(8, "Dark2"), max.words=20, min.freq=1)
+      #print(p)
+      if (is.null(p) || (p$Predict[[1]] < 0)) {
+          NULL
       } else {
-        NULL
+        wordcloud(p$PredictWord, p$Freq, colors=brewer.pal(8, "Dark2"), max.words=20, min.freq=1, rot.per = 0.3, random.color=TRUE)
       }
     })
     
