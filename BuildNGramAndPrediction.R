@@ -33,14 +33,14 @@ processLines <- function(line, dbfile1, dbfile2, dbfile3, dbfile4, dbfile5) {
   processTokenLine(poststem, stemdict, 5, dbfile5)
 }
 
-processTokenFile <- function(infile,dbfile1,dbfile2,dbfile3,dbfile4) {
+processTokenFile <- function(infile,dbfile1,dbfile2,dbfile3,dbfile4,dbfile5) {
   print(paste(Sys.time(), "Processing tokens from", infile))
   inp <- file(infile, "r", encoding="UTF-8")
   cnt <- 0
   rslt <- ""
   while(length(rslt) > 0) {
     rslt <- readLines(inp, 20000, skipNul=TRUE)
-    lapply(rslt, processLines, dbfile1,dbfile2,dbfile3,dbfile4)
+    lapply(rslt, processLines, dbfile1,dbfile2,dbfile3,dbfile4,dbfile5)
     cnt <- cnt + length(rslt)
     print(paste(Sys.time(), "Processed", cnt, "lines"))
   }
