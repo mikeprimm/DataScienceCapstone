@@ -6,101 +6,189 @@ require(data.table)
 
 nodeId <- 0
 
-addToFrequencyList <- function(ngram, predict) {
-  writeLines(paste0(ngram, " :", predict), dbfile)
+addToFrequencyList <- function(ngram, predict, outfile) {
+  writeLines(paste0(ngram, " :", predict), outfile)
 }
 
-processTokenLine <- function(poststem, stemdict) {
-  # Get 5-grams for whole sentence, and add on truncated 4, 3 and 2
-  pslen <- length(poststem)
-  ng <- list()
-  if (pslen >= 5) {
-    ng <- c(ngrams(poststem, 5), list(poststem[1:4], poststem[1:3], poststem[1:2]))
-  } else if (pslen == 4) {
-    ng <- list(poststem[1:4], poststem[1:3], poststem[1:2])
-  } else if (pslen == 3) {
-    ng <- list(poststem[1:3], poststem[1:2])
-  } else if (pslen == 2) {
-    ng <- list(poststem[1:2])
-  }
-  else {
-    ng <- list()
-  }
+processTokenLine <- function(poststem, stemdict, n, outfile) {
+  # Get N-grams for whole sentence
+  ng <- ngrams(poststem, n+1)
   if(length(ng) > 0) {
-    n <- vapply(ng, length, 0)
-    predict <- mapply(function(f, nn) { f[nn] }, ng, n) # Get last words of ngrams
+    predict <- vapply(ng, function(f) f[n+1], "") # Get last words of ngrams
     predict <- ifelse(is.na(idx <- match(predict, poststem)), predict, stemdict[idx])
-    ngkeylist <- mapply(function(f, nn) { f[(nn-1):1] }, ng, n)
+    ngkeylist <- lapply(ng, function(f) { f[n:1] })
     ngkey <- vapply(ngkeylist, paste, "", collapse = " ")
-    addToFrequencyList(ngkey, predict)
+    addToFrequencyList(ngkey, predict, outfile)
   }
 }
 
-processLines <- function(line) {
+processLines <- function(line, dbfile1,dbfile2,dbfile3,dbfile4) {
   parts <- strsplit(line, ":", fixed=TRUE)[[1]] # Split parts (1=sentence, 2=after stopwords, 3=after stem)
   stemdict <- strsplit(parts[1], " ", fixed=TRUE)[[1]] # Make stem completion dictionary from post stopwords
   poststem <- strsplit(parts[2], " ", fixed=TRUE)[[1]] # Start with post-stem line
-  processTokenLine(poststem, stemdict)
+  processTokenLine(poststem, stemdict, 1, dbfile1)
+  processTokenLine(poststem, stemdict, 2, dbfile2)
+  processTokenLine(poststem, stemdict, 3, dbfile3)
+  processTokenLine(poststem, stemdict, 4, dbfile4)
 }
 
-processTokenFile <- function(infile) {
+processTokenFile <- function(infile,dbfile1,dbfile2,dbfile3,dbfile4) {
   print(paste(Sys.time(), "Processing tokens from", infile))
   inp <- file(infile, "r", encoding="UTF-8")
   cnt <- 0
   rslt <- ""
   while(length(rslt) > 0) {
     rslt <- readLines(inp, 20000, skipNul=TRUE)
-    lapply(rslt, processLines)
+    lapply(rslt, processLines, dbfile1,dbfile2,dbfile3,dbfile4)
     cnt <- cnt + length(rslt)
     print(paste(Sys.time(), "Processed", cnt, "lines"))
   }
   close(inp)
 }
 
-if (!file.exists("./data/ngram_pred.txt")) {
-  dbfile <- file("./data/ngram_pred.txt", open = "wt+")
-
-  processTokenFile("./data/en_US.blogs.tokens.txt.gz")
-  processTokenFile("./data/en_US.news.tokens.txt.gz")
-  processTokenFile("./data/en_US.twitter.tokens.txt.gz")
-  close(dbfile)
-  rm(dbfile)
+if (!file.exists("./data/ngram_pred4.txt")) {
+  dbfile1 <- file("./data/ngram_pred1.txt", open = "wt+")
+  dbfile2 <- file("./data/ngram_pred2.txt", open = "wt+")
+  dbfile3 <- file("./data/ngram_pred3.txt", open = "wt+")
+  dbfile4 <- file("./data/ngram_pred4.txt", open = "wt+")
+  processTokenFile("./data/en_US.blogs.tokens.txt.gz",dbfile1,dbfile2,dbfile3,dbfile4)
+  processTokenFile("./data/en_US.news.tokens.txt.gz",dbfile1,dbfile2,dbfile3,dbfile4)
+  processTokenFile("./data/en_US.twitter.tokens.txt.gz",dbfile1,dbfile2,dbfile3,dbfile4)
+  close(dbfile1)
+  close(dbfile2)
+  close(dbfile3)
+  close(dbfile4)
 }
-# Make sorted version of file: much easier to count frequencies, and faster than R code
-#system("sort -o ./data/ngram_pred.sorted.txt ./data/ngram_pred.txt")
-
-#dbfile <- file("./data/ngram_pred.sorted.txt", open = "rt")
-# Load rows and make frequency table
-if(!file.exists("./data/freqTable.RData")) {
-  ftable <- data.table(table(readLines("./data/ngram_pred.txt")))
+# Load rows and make frequency table for single words
+if(!file.exists("./data/freqTable1.RData")) {
+  # Handle single words
+  ftable <- data.table(table(readLines("./data/ngram_pred1.txt")))
   ngramPredict <- strsplit(ftable$V1, ":", fixed=TRUE)
   Predict <- vapply(ngramPredict, function(v) v[[2]], "")
   Ngrams <- lapply(ngramPredict, function(v) strsplit(v[[1]], " ", fixed=TRUE)[[1]])
   rm(ngramPredict)
   Freq <- ftable$N
-  Word4 <- vapply(Ngrams, function(v) ifelse(length(v) >= 1, v[[1]], NA_character_), "")
-  Word3 <- vapply(Ngrams, function(v) ifelse(length(v) >= 2, v[[2]], NA_character_), "")
-  Word2 <- vapply(Ngrams, function(v) ifelse(length(v) >= 3, v[[3]], NA_character_), "")
-  Word1 <- vapply(Ngrams, function(v) ifelse(length(v) >= 4, v[[4]], NA_character_), "")
+  Word1 <- vapply(Ngrams, function(v) v[[1]], "")
   rm(Ngrams)
   rm(ftable)
-  UniqueWords <- sort(unique(c(Word4,Word3,Word2,Word1,Predict)))
-  Word4 <- as.integer(factor(Word4, UniqueWords))
-  Word3 <- as.integer(factor(Word3, UniqueWords))
-  Word2 <- as.integer(factor(Word2, UniqueWords))
+  # Grab unique words from single word case
+  UniqueWords <- sort(unique(c(Word1,Predict)))
+  # Map words to integers
   Word1 <- as.integer(factor(Word1, UniqueWords))
   Predict <- as.integer(factor(Predict, UniqueWords))
-  freqTable <- data.table(Word4 = Word4, Word3 = Word3, Word2 = Word2, Word1 = Word1, Predict = Predict, Freq = Freq)
-  rm(Word4)
-  rm(Word3)
-  rm(Word2)
+  # Build table  
+  freqTable1 <- data.table(Word1 = Word1, Predict = Predict, Freq = Freq)
   rm(Word1)
   rm(Predict)
   rm(Freq)
-  setkey(freqTable, Word4, Word3, Word2, Word1, Predict)
-  save(freqTable, UniqueWords, file="./data/freqTable.RData", compress=TRUE)
+  setkey(freqTable1, Word1, Predict)
+  # Prune unique ones (lots of them, little predictive value)
+  freqTable1 <- freqTable1[freqTable1$Freq > 1,]
+  # Save it
+  save(freqTable1, UniqueWords, file="./data/freqTable1.RData", compress=TRUE)
 } else {
-  load("./data/freqTable.RData")
+  load("./data/freqTable1.RData")
+}
+# Load rows and make frequency table for 2-grams
+if(!file.exists("./data/freqTable2.RData")) {
+  ftable <- data.table(table(readLines("./data/ngram_pred2.txt")))
+  ngramPredict <- strsplit(ftable$V1, ":", fixed=TRUE)
+  Predict <- vapply(ngramPredict, function(v) v[[2]], "")
+  Ngrams <- lapply(ngramPredict, function(v) strsplit(v[[1]], " ", fixed=TRUE)[[1]])
+  rm(ngramPredict)
+  Freq <- ftable$N
+  Word1 <- vapply(Ngrams, function(v) v[[2]], "")
+  Word2 <- vapply(Ngrams, function(v) v[[1]], "")
+  rm(Ngrams)
+  rm(ftable)
+  # Map words to integers
+  Word1 <- as.integer(factor(Word1, UniqueWords))
+  Word2 <- as.integer(factor(Word2, UniqueWords))
+  Predict <- as.integer(factor(Predict, UniqueWords))
+  # Build table  
+  freqTable2 <- data.table(Word2 = Word2, Word1 = Word1, Predict = Predict, Freq = Freq)
+  rm(Word1)
+  rm(Word2)
+  rm(Predict)
+  rm(Freq)
+  setkey(freqTable2, Word2, Word1, Predict)
+  # Prune unique ones (lots of them, little predictive value)
+  freqTable2 <- freqTable2[freqTable2$Freq > 1,]
+  # Save it
+  save(freqTable2, file="./data/freqTable2.RData", compress=TRUE)
+} else {
+  load("./data/freqTable2.RData")
+}
+
+# Load rows and make frequency table for 3-grams
+if(!file.exists("./data/freqTable3.RData")) {
+  ftable <- data.table(table(readLines("./data/ngram_pred3.txt")))
+  ngramPredict <- strsplit(ftable$V1, ":", fixed=TRUE)
+  Predict <- vapply(ngramPredict, function(v) v[[2]], "")
+  Ngrams <- lapply(ngramPredict, function(v) strsplit(v[[1]], " ", fixed=TRUE)[[1]])
+  rm(ngramPredict)
+  Freq <- ftable$N
+  Word1 <- vapply(Ngrams, function(v) v[[3]], "")
+  Word2 <- vapply(Ngrams, function(v) v[[2]], "")
+  Word3 <- vapply(Ngrams, function(v) v[[1]], "")
+  rm(Ngrams)
+  rm(ftable)
+  # Map words to integers
+  Word1 <- as.integer(factor(Word1, UniqueWords))
+  Word2 <- as.integer(factor(Word2, UniqueWords))
+  Word3 <- as.integer(factor(Word3, UniqueWords))
+  Predict <- as.integer(factor(Predict, UniqueWords))
+  # Build table  
+  freqTable3 <- data.table(Word3 = Word3, Word2 = Word2, Word1 = Word1, Predict = Predict, Freq = Freq)
+  rm(Word1)
+  rm(Word2)
+  rm(Word3)
+  rm(Predict)
+  rm(Freq)
+  setkey(freqTable3, Word3, Word2, Word1, Predict)
+  # Prune unique ones (lots of them, little predictive value)
+  freqTable3 <- freqTable3[freqTable3$Freq > 1,]
+  # Save it
+  save(freqTable3, file="./data/freqTable3.RData", compress=TRUE)
+} else {
+  load("./data/freqTable3.RData")
+}
+
+# Load rows and make frequency table for 4-grams
+if(!file.exists("./data/freqTable4.RData")) {
+  ftable <- data.table(table(readLines("./data/ngram_pred4.txt")))
+  ngramPredict <- strsplit(ftable$V1, ":", fixed=TRUE)
+  Predict <- vapply(ngramPredict, function(v) v[[2]], "")
+  Ngrams <- lapply(ngramPredict, function(v) strsplit(v[[1]], " ", fixed=TRUE)[[1]])
+  rm(ngramPredict)
+  Freq <- ftable$N
+  Word1 <- vapply(Ngrams, function(v) v[[4]], "")
+  Word2 <- vapply(Ngrams, function(v) v[[3]], "")
+  Word3 <- vapply(Ngrams, function(v) v[[2]], "")
+  Word4 <- vapply(Ngrams, function(v) v[[1]], "")
+  rm(Ngrams)
+  rm(ftable)
+  # Map words to integers
+  Word1 <- as.integer(factor(Word1, UniqueWords))
+  Word2 <- as.integer(factor(Word2, UniqueWords))
+  Word3 <- as.integer(factor(Word3, UniqueWords))
+  Word4 <- as.integer(factor(Word4, UniqueWords))
+  Predict <- as.integer(factor(Predict, UniqueWords))
+  # Build table  
+  freqTable4 <- data.table(Word4 = Word4, Word3 = Word3, Word2 = Word2, Word1 = Word1, Predict = Predict, Freq = Freq)
+  rm(Word1)
+  rm(Word2)
+  rm(Word3)
+  rm(Word4)
+  rm(Predict)
+  rm(Freq)
+  setkey(freqTable4, Word4, Word3, Word2, Word1, Predict)
+  # Prune unique ones (lots of them, little predictive value)
+  freqTable4 <- freqTable4[freqTable4$Freq > 1,]
+  # Save it
+  save(freqTable4, file="./data/freqTable4.RData", compress=TRUE)
+} else {
+  load("./data/freqTable4.RData")
 }
 
 # Build SQLite prediction table DB
@@ -108,9 +196,15 @@ if (!file.exists("./data/freqTable.db")) {
   require(RSQLite)
   db <- dbConnect(SQLite(), "./data/freqTable.db")
   dbGetQuery(db, "CREATE TABLE UniqueWords (Word TEXT, Ind INT, PRIMARY KEY (Word))")
-  dbGetQuery(db, "CREATE TABLE freqTable (Word4 INT, Word3 INT, Word2 INT, Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word4,Word3,Word2,Word1,Predict))")
+  dbGetQuery(db, "CREATE TABLE freqTable1 (Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word1,Predict))")
+  dbGetQuery(db, "CREATE TABLE freqTable2 (Word2 INT, Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word2,Word1,Predict))")
+  dbGetQuery(db, "CREATE TABLE freqTable3 (Word3 INT, Word2 INT, Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word3,Word2,Word1,Predict))")
+  dbGetQuery(db, "CREATE TABLE freqTable4 (Word4 INT, Word3 INT, Word2 INT, Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word4,Word3,Word2,Word1,Predict))")
   dbWriteTable(db, "UniqueWords", data.table(Word=UniqueWords,Ind=c(1:length(UniqueWords))), append=TRUE)
-  dbWriteTable(db, "freqTable", freqTable, append=TRUE)
+  dbWriteTable(db, "freqTable1", freqTable1, append=TRUE)
+  dbWriteTable(db, "freqTable2", freqTable2, append=TRUE)
+  dbWriteTable(db, "freqTable3", freqTable3, append=TRUE)
+  dbWriteTable(db, "freqTable4", freqTable4, append=TRUE)
   dbDisconnect(db)
 }
 if (!file.exists("./data/freqTable.db.gz")) {
