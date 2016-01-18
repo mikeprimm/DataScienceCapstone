@@ -51,8 +51,7 @@ findPredict <- function(db, v) {
     v
 }
 
-doPrediction <- function(tokens) {
-  db <- dbConnect(SQLite(), "freqTable.db", flags=SQLITE_RO)
+doPrediction <- function(tokens, db) {
   # Get word IDs for known tokens, and reverse so last word is first
   idx <- rev(lookupWord(db, tokens))
   predict <- NULL
@@ -81,12 +80,16 @@ doPrediction <- function(tokens) {
       predict <- findPredict(db, v)
       print(paste("pred1:", tokens, rev(idx), collapse = " "))
   }
-  dbDisconnect(db)
   predict
 }
 
 print("Start Shiny Server")
-shinyServer(function(input, output) {
+shinyServer(function(input, output, session) {
+  db <- dbConnect(SQLite(), "freqTable.db", flags=SQLITE_RO)
+  session$onSessionEnded(function() {
+    dbDisconnect(db)
+    print("Cleanup session")
+  })
   prediction <- reactive({
         sentences <- lineToSentences(input$text)
         predict = data.frame(Freq=0,Predict=-1,PredictWord="<no prediction>", stringsAsFactors = FALSE)
@@ -98,7 +101,7 @@ shinyServer(function(input, output) {
           v <- strsplit(v, " ", fixed=TRUE)[[1]]
           # Run prediction
           if (length(v) >= 1) {
-              predict <- doPrediction(v)
+              predict <- doPrediction(v, db)
           }
         }
         predict

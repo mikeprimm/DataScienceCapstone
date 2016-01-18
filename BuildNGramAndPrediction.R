@@ -235,9 +235,9 @@ if(!file.exists("./data/freqTable5.RData")) {
 }
 
 # Build SQLite prediction table DB
-if (!file.exists("./data/freqTable.db")) {
+if (!file.exists("./ShinyApp/freqTable.db")) {
   require(RSQLite)
-  db <- dbConnect(SQLite(), "./data/freqTable.db")
+  db <- dbConnect(SQLite(), "./ShinyApp/freqTable.db")
   dbGetQuery(db, "CREATE TABLE UniqueWords (Word TEXT, Ind INT, PRIMARY KEY (Word))")
   dbGetQuery(db, "CREATE TABLE freqTable1 (Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word1,Predict))")
   dbGetQuery(db, "CREATE TABLE freqTable2 (Word2 INT, Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word2,Word1,Predict))")
@@ -254,5 +254,5 @@ if (!file.exists("./data/freqTable.db")) {
 }
 if (!file.exists("./data/freqTable.db.gz")) {
   require(R.utils)
-  gzip("./data/freqTable.db", destname="./data/freqTable.db.gz", remove=FALSE)
+  gzip("./ShinyApp/freqTable.db", destname="./data/freqTable.db.gz", remove=FALSE)
 }
