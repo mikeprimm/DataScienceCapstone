@@ -58,27 +58,27 @@ doPrediction <- function(tokens, db) {
   if (is.null(predict) && length(idx) >= 5) {
     v <- dbGetPreparedQuery(db, "SELECT Predict, Freq from freqTable5 WHERE Word5=? AND Word4=? AND Word3=? AND Word2=? AND Word1=? ORDER BY Freq DESC LIMIT 20", data.frame(x=idx[[1]],y=idx[[2]],z=idx[[3]],zz=idx[[4]],zzz=idx[[5]]))
     predict <- findPredict(db, v)
-    print(paste("pred5:", tokens, rev(idx), collapse = " "))
+    #print(paste("pred5:", tokens, rev(idx), collapse = " "))
   }
   if (is.null(predict) && length(idx) >= 4) {
       v <- dbGetPreparedQuery(db, "SELECT Predict, Freq from freqTable4 WHERE Word4=? AND Word3=? AND Word2=? AND Word1=? ORDER BY Freq DESC LIMIT 20", data.frame(x=idx[[1]],y=idx[[2]],z=idx[[3]],zz=idx[[4]]))
       predict <- findPredict(db, v)
-      print(paste("pred4:", tokens, rev(idx), collapse = " "))
+      #print(paste("pred4:", tokens, rev(idx), collapse = " "))
   }
   if (is.null(predict) && (length(idx) >= 3)) {
       v <- dbGetPreparedQuery(db, "SELECT Predict, Freq from freqTable3 WHERE Word3=? AND Word2=? AND Word1=? ORDER BY Freq DESC LIMIT 20", data.frame(x=idx[[1]],y=idx[[2]],z=idx[[3]]))
       predict <- findPredict(db, v)
-      print(paste("pred3:", tokens, rev(idx), collapse = " "))
+      #print(paste("pred3:", tokens, rev(idx), collapse = " "))
   }
   if (is.null(predict) && (length(idx) >= 2)) {
       v <- dbGetPreparedQuery(db, "SELECT Predict, Freq from freqTable2 WHERE Word2=? AND Word1=? ORDER BY Freq DESC LIMIT 20", data.frame(x=idx[[1]],y=idx[[2]]))
       predict <- findPredict(db, v)
-      print(paste("pred2:", tokens, rev(idx), collapse = " "))
+      #print(paste("pred2:", tokens, rev(idx), collapse = " "))
   }
   if (is.null(predict) && (length(idx) >= 1)) {
       v <- dbGetPreparedQuery(db, "SELECT Predict, Freq from freqTable1 WHERE Word1=? ORDER BY Freq DESC LIMIT 20", data.frame(x=idx[[1]]))
       predict <- findPredict(db, v)
-      print(paste("pred1:", tokens, rev(idx), collapse = " "))
+      #print(paste("pred1:", tokens, rev(idx), collapse = " "))
   }
   predict
 }
@@ -88,9 +88,10 @@ shinyServer(function(input, output, session) {
   db <- dbConnect(SQLite(), "freqTable.db", flags=SQLITE_RO)
   session$onSessionEnded(function() {
     dbDisconnect(db)
-    print("Cleanup session")
+    #print("Cleanup session")
   })
   prediction <- reactive({
+    runtime <- system.time({
         sentences <- lineToSentences(input$text)
         predict = data.frame(Freq=0,Predict=-1,PredictWord="<no prediction>", stringsAsFactors = FALSE)
         scnt <- length(sentences)
@@ -104,19 +105,20 @@ shinyServer(function(input, output, session) {
               predict <- doPrediction(v, db)
           }
         }
-        predict
-    })     
+    })
+    list(predict, runtime)
+  })     
     output$Prediction <- renderText({
-      p <- prediction()
-      print(p)
+      p <- prediction()[[1]]
+      #print(p)
       p$PredictWord[[1]]
     })
     output$Prediction2 <- renderText({
-      p <- prediction()
+      p <- prediction()[[1]]
       ifelse(nrow(p) >= 2, p$PredictWord[[2]], "")
     })
     output$Prediction3 <- renderText({
-      p <- prediction()
+      p <- prediction()[[1]]
       ifelse(nrow(p) >= 3, p$PredictWord[[3]], "")
     })
     outputOptions(output, "Prediction2", suspendWhenHidden=FALSE)    
@@ -125,13 +127,16 @@ shinyServer(function(input, output, session) {
     wordcloud_rep <- repeatable(wordcloud)
     
     output$WordCloud <- renderPlot({
-      p <- prediction()
+      p <- prediction()[[1]]
       if (is.null(p) || (p$Predict[[1]] < 0)) {
           NULL
       } else {
         wordcloud_rep(p$PredictWord, p$Freq, colors=brewer.pal(8, "Dark2"), max.words=20, min.freq=1, rot.per = 0.3, random.color=TRUE)
       }
     })
-    
+    output$ExecTime <- renderText({
+      v <- prediction()[[2]]
+      paste("User:",format(v[[1]], nsmall=3), "sec, System:", format(v[[2]],nsmall=3), "sec, Total:", format(v[[3]],nsmall=3), "sec")
+    })
 })
 print("Shiny Server Started")

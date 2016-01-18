@@ -16,7 +16,8 @@ shinyUI(
                                  h3("Prediction (third):", textOutput("Prediction3")))
             ),
             mainPanel(
-                plotOutput("WordCloud")
+                plotOutput("WordCloud"),
+                h5("Execution time: ", textOutput("ExecTime"))
             )
         ) 
     )
