@@ -91,52 +91,56 @@ shinyServer(function(input, output, session) {
     #print("Cleanup session")
   })
   prediction <- reactive({
-    runtime <- system.time({
-        sentences <- lineToSentences(input$text)
-        predict = data.frame(Freq=0,Predict=-1,PredictWord="<no prediction>", stringsAsFactors = FALSE)
-        scnt <- length(sentences)
-        if (scnt >= 1) {
-          # Tokenize last sentence, since prediction is for after this...
-          v <- tokenizeSentence(sentences[scnt])
-          # Split by spaces
-          v <- strsplit(v, " ", fixed=TRUE)[[1]]
-          # Run prediction
-          if (length(v) >= 1) {
-              predict <- doPrediction(v, db)
-          }
-        }
-    })
-    list(predict, runtime)
-  })     
-    output$Prediction <- renderText({
-      p <- prediction()[[1]]
-      #print(p)
-      p$PredictWord[[1]]
-    })
-    output$Prediction2 <- renderText({
-      p <- prediction()[[1]]
-      ifelse(nrow(p) >= 2, p$PredictWord[[2]], "")
-    })
-    output$Prediction3 <- renderText({
-      p <- prediction()[[1]]
-      ifelse(nrow(p) >= 3, p$PredictWord[[3]], "")
-    })
-    outputOptions(output, "Prediction2", suspendWhenHidden=FALSE)    
-    outputOptions(output, "Prediction3", suspendWhenHidden=FALSE)    
-
-    wordcloud_rep <- repeatable(wordcloud)
-    
-    output$WordCloud <- renderPlot({
-      p <- prediction()[[1]]
-      if (is.null(p) || (p$Predict[[1]] < 0)) {
-          NULL
-      } else {
-        wordcloud_rep(p$PredictWord, p$Freq, colors=brewer.pal(8, "Dark2"), max.words=20, min.freq=1, rot.per = 0.3, random.color=TRUE)
+    st <- proc.time()
+    sentences <- lineToSentences(input$text)
+    predict = data.frame(Freq=0,Predict=-1,PredictWord="<no prediction>", stringsAsFactors = FALSE)
+    scnt <- length(sentences)
+    if (scnt >= 1) {
+      # Tokenize last sentence, since prediction is for after this...
+      v <- tokenizeSentence(sentences[scnt])
+      # Split by spaces
+      v <- strsplit(v, " ", fixed=TRUE)[[1]]
+      # Run prediction
+      if (length(v) >= 1) {
+        predict <- doPrediction(v, db)
       }
-    })
-    output$ExecTime <- renderText({
-      v <- prediction()[[2]]
-      paste("User:",format(v[[1]], nsmall=3), "sec, System:", format(v[[2]],nsmall=3), "sec, Total:", format(v[[3]],nsmall=3), "sec")
-    })
+    }
+    st <- proc.time() - st
+    list(predict, st, mem_used())
+  })     
+  output$Prediction <- renderText({
+    p <- prediction()[[1]]
+    #print(p)
+    p$PredictWord[[1]]
+  })
+  output$Prediction2 <- renderText({
+    p <- prediction()[[1]]
+    ifelse(nrow(p) >= 2, p$PredictWord[[2]], "")
+  })
+  output$Prediction3 <- renderText({
+    p <- prediction()[[1]]
+    ifelse(nrow(p) >= 3, p$PredictWord[[3]], "")
+  })
+  outputOptions(output, "Prediction2", suspendWhenHidden=FALSE)    
+  outputOptions(output, "Prediction3", suspendWhenHidden=FALSE)    
+  
+  wordcloud_rep <- repeatable(wordcloud)
+  
+  output$WordCloud <- renderPlot({
+    p <- prediction()[[1]]
+    if (is.null(p) || (p$Predict[[1]] < 0)) {
+      NULL
+    } else {
+      wordcloud_rep(p$PredictWord, p$Freq, colors=brewer.pal(8, "Dark2"), max.words=20, min.freq=1, rot.per = 0.3, random.color=TRUE)
+    }
+  })
+  output$ExecTime <- renderText({
+    v <- prediction()[[2]]
+    paste("User:",format(v[[1]], nsmall=3), "sec, System:", format(v[[2]],nsmall=3), "sec, Total:", format(v[[3]],nsmall=3), "sec")
+  })
+  output$MemUsage <- renderText({
+    mem <- prediction()[[3]]
+    paste(format(mem / 1024 / 1024, nsmall=3), "MB")
+  })
 })
 print("Shiny Server Started")

@@ -17,7 +17,8 @@ shinyUI(
             ),
             mainPanel(
                 plotOutput("WordCloud"),
-                h5("Execution time: ", textOutput("ExecTime"))
+                h5("Execution time: ", textOutput("ExecTime")),
+                h5("Memory Used: ", textOutput("MemUsage"))
             )
         ) 
     )

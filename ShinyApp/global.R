@@ -7,7 +7,8 @@ suppressPackageStartupMessages(c(
   require(RWeka),
   require(R.utils),
   require(SnowballC),
-  require(wordcloud)
+  require(wordcloud),
+  require(pryr)
 ))
 
 if (!file.exists("freqTable.db")) {
