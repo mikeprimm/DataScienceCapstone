@@ -16,9 +16,7 @@ tokenizeSentence <- function(dataset) {
   dataset <- stripWhitespace(dataset) # Remove extra whitespace
   dataset <- trimws(dataset) # Trim leading/trailing ws
   v <- dataset # Grab version without stemming
-  dataset <- stemDocument(dataset, language="english") # Stem words
-  dataset <- stripWhitespace(dataset) # Remove extra whitespace
-  dataset <- trimws(dataset) # Trim leading/trailing ws
+  dataset <- paste(stemDocument(strsplit(dataset, " ", fixed=TRUE)[[1]], language="english"), collapse=" ") # Stem words
   paste(v, dataset, sep=":")
 }
 
