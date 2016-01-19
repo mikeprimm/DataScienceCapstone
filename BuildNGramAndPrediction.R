@@ -237,8 +237,16 @@ if(!file.exists("./data/freqTable5.RData")) {
 # Build SQLite prediction table DB
 if (!file.exists("./ShinyApp/freqTable.db")) {
   require(RSQLite)
+  # Prune final tables to only have top 20 of each ngram sequence
+  freqTable1 <- freqTable1[order(Word1,-Freq),.SD[1:min(20,nrow(.SD)),],by="Word1"]
+  freqTable2 <- freqTable2[order(Word2,Word1,-Freq),.SD[1:min(20,nrow(.SD)),],by="Word2,Word1"]
+  freqTable3 <- freqTable3[order(Word3,Word2,Word1,-Freq),.SD[1:min(20,nrow(.SD)),],by="Word3,Word2,Word1"]
+  freqTable4 <- freqTable4[order(Word4,Word3,Word2,Word1,-Freq),.SD[1:min(20,nrow(.SD)),],by="Word4,Word3,Word2,Word1"]
+  freqTable5 <- freqTable5[order(Word5,Word4,Word3,Word2,Word1,-Freq),.SD[1:min(20,nrow(.SD)),],by="Word5,Word4,Word3,Word2,Word1"]
+  # Create and store SQLite DB
   db <- dbConnect(SQLite(), "./ShinyApp/freqTable.db")
   dbGetQuery(db, "CREATE TABLE UniqueWords (Word TEXT, Ind INT, PRIMARY KEY (Word))")
+  dbGetQuery(db, "CREATE INDEX nameByID on UniqueWords (Ind)")
   dbGetQuery(db, "CREATE TABLE freqTable1 (Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word1,Predict))")
   dbGetQuery(db, "CREATE TABLE freqTable2 (Word2 INT, Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word2,Word1,Predict))")
   dbGetQuery(db, "CREATE TABLE freqTable3 (Word3 INT, Word2 INT, Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word3,Word2,Word1,Predict))")
