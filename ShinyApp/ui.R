@@ -5,7 +5,11 @@ print("Start Shiny UI")
 shinyUI(
     fluidPage(
         # Application title
-        titlePanel("NLP-based Word Prediction Project"),
+        titlePanel("NLP Word Prediction Project"),
+        p("By Mike Primm"),
+        p("This project demonstrates a next word prediction algorithm, based on N-Gram frequency analysis and Markov chains, derived from blog, news, and Twitter data provided by SwiftKey."),
+        p("The implementation has attempted to maximize the leverage of the supplied training data (deriving the model from analysis of almost 7 million provided sentences), while minimizing the computational and memory cost of the production use of the algorithm."),
+        p("Enter any desired text, including punctuation or multiple sentences, and algorithm will attempt to guess most likely next word after last one entered."),
         sidebarLayout(
             sidebarPanel(
                 textInput("text", "Input Text:", value = ""),

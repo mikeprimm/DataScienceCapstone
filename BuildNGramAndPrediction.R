@@ -264,3 +264,64 @@ if (!file.exists("./data/freqTable.db.gz")) {
   require(R.utils)
   gzip("./ShinyApp/freqTable.db", destname="./data/freqTable.db.gz", remove=FALSE)
 }
+# Generate top 3 word only model (to test size)
+if (!file.exists("./data/freqTable3.db")) {
+  require(RSQLite)
+  # Prune final tables to only have top 3 of each ngram sequence
+  freqTable1 <- freqTable1[order(Word1,-Freq),.SD[1:min(3,nrow(.SD)),],by="Word1"]
+  freqTable2 <- freqTable2[order(Word2,Word1,-Freq),.SD[1:min(3,nrow(.SD)),],by="Word2,Word1"]
+  freqTable3 <- freqTable3[order(Word3,Word2,Word1,-Freq),.SD[1:min(3,nrow(.SD)),],by="Word3,Word2,Word1"]
+  freqTable4 <- freqTable4[order(Word4,Word3,Word2,Word1,-Freq),.SD[1:min(3,nrow(.SD)),],by="Word4,Word3,Word2,Word1"]
+  freqTable5 <- freqTable5[order(Word5,Word4,Word3,Word2,Word1,-Freq),.SD[1:min(3,nrow(.SD)),],by="Word5,Word4,Word3,Word2,Word1"]
+  # Create and store SQLite DB
+  db <- dbConnect(SQLite(), "./data/freqTable3.db")
+  dbGetQuery(db, "CREATE TABLE UniqueWords (Word TEXT, Ind INT, PRIMARY KEY (Word))")
+  dbGetQuery(db, "CREATE INDEX nameByID on UniqueWords (Ind)")
+  dbGetQuery(db, "CREATE TABLE freqTable1 (Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word1,Predict))")
+  dbGetQuery(db, "CREATE TABLE freqTable2 (Word2 INT, Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word2,Word1,Predict))")
+  dbGetQuery(db, "CREATE TABLE freqTable3 (Word3 INT, Word2 INT, Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word3,Word2,Word1,Predict))")
+  dbGetQuery(db, "CREATE TABLE freqTable4 (Word4 INT, Word3 INT, Word2 INT, Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word4,Word3,Word2,Word1,Predict))")
+  dbGetQuery(db, "CREATE TABLE freqTable5 (Word5 INT, Word4 INT, Word3 INT, Word2 INT, Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word5,Word4,Word3,Word2,Word1,Predict))")
+  dbWriteTable(db, "UniqueWords", data.table(Word=UniqueWords,Ind=c(1:length(UniqueWords))), append=TRUE)
+  dbWriteTable(db, "freqTable1", freqTable1, append=TRUE)
+  dbWriteTable(db, "freqTable2", freqTable2, append=TRUE)
+  dbWriteTable(db, "freqTable3", freqTable3, append=TRUE)
+  dbWriteTable(db, "freqTable4", freqTable4, append=TRUE)
+  dbWriteTable(db, "freqTable5", freqTable5, append=TRUE)
+  dbDisconnect(db)
+}
+if (!file.exists("./data/freqTable3.db.gz")) {
+  require(R.utils)
+  gzip("./data/freqTable3.db", destname="./data/freqTable3.db.gz", remove=FALSE)
+}
+# Generate top 1 word only model (to test size)
+if (!file.exists("./data/freqTable1.db")) {
+  require(RSQLite)
+  # Prune final tables to only have top 1 of each ngram sequence
+  freqTable1 <- freqTable1[order(Word1,-Freq),.SD[1,],by="Word1"]
+  freqTable2 <- freqTable2[order(Word2,Word1,-Freq),.SD[1,],by="Word2,Word1"]
+  freqTable3 <- freqTable3[order(Word3,Word2,Word1,-Freq),.SD[1,],by="Word3,Word2,Word1"]
+  freqTable4 <- freqTable4[order(Word4,Word3,Word2,Word1,-Freq),.SD[1,],by="Word4,Word3,Word2,Word1"]
+  freqTable5 <- freqTable5[order(Word5,Word4,Word3,Word2,Word1,-Freq),.SD[1,],by="Word5,Word4,Word3,Word2,Word1"]
+  # Create and store SQLite DB
+  db <- dbConnect(SQLite(), "./data/freqTable1.db")
+  dbGetQuery(db, "CREATE TABLE UniqueWords (Word TEXT, Ind INT, PRIMARY KEY (Word))")
+  dbGetQuery(db, "CREATE INDEX nameByID on UniqueWords (Ind)")
+  dbGetQuery(db, "CREATE TABLE freqTable1 (Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word1,Predict))")
+  dbGetQuery(db, "CREATE TABLE freqTable2 (Word2 INT, Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word2,Word1,Predict))")
+  dbGetQuery(db, "CREATE TABLE freqTable3 (Word3 INT, Word2 INT, Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word3,Word2,Word1,Predict))")
+  dbGetQuery(db, "CREATE TABLE freqTable4 (Word4 INT, Word3 INT, Word2 INT, Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word4,Word3,Word2,Word1,Predict))")
+  dbGetQuery(db, "CREATE TABLE freqTable5 (Word5 INT, Word4 INT, Word3 INT, Word2 INT, Word1 INT, Predict INT, Freq INT, PRIMARY KEY (Word5,Word4,Word3,Word2,Word1,Predict))")
+  dbWriteTable(db, "UniqueWords", data.table(Word=UniqueWords,Ind=c(1:length(UniqueWords))), append=TRUE)
+  dbWriteTable(db, "freqTable1", freqTable1, append=TRUE)
+  dbWriteTable(db, "freqTable2", freqTable2, append=TRUE)
+  dbWriteTable(db, "freqTable3", freqTable3, append=TRUE)
+  dbWriteTable(db, "freqTable4", freqTable4, append=TRUE)
+  dbWriteTable(db, "freqTable5", freqTable5, append=TRUE)
+  dbDisconnect(db)
+}
+if (!file.exists("./data/freqTable1.db.gz")) {
+  require(R.utils)
+  gzip("./data/freqTable1.db", destname="./data/freqTable1.db.gz", remove=FALSE)
+}
+

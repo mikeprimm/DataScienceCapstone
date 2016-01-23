@@ -1,0 +1,37 @@
+Next Word Prediction with N-Gram Frequency and Markov Chains
+========================================================
+author: Michael Primm 
+date: 1/23/2016
+font-family: 'Helvetica'
+
+The Problem and Source Data
+========================================================
+
+<small>The problem defined was to produce an algorithm that would predict the most likely next word in a partial sentence, based upon a model produced from a large set of training data provided by SwiftKey.
+
+- Source data included `r round(file.size("./data/final/en_US/en_US.blogs.txt")/1024/1024,2)` MB of blogs, `r round(file.size("./data/final/en_US/en_US.news.txt")/1024/1024,2)` MB of blogs, and `r round(file.size("./data/final/en_US/en_US.twitter.txt")/1024/1024,2)` MB of tweets  
+- Source data included punctuation, profanity, control and non-Latin characters and often multiple sentences per record/line
+- Size of source data proved to be challenging for typical in-memory processing</small>
+
+Core Approach To Problem
+========================================================
+- <small>Process source files, line by line, into new intermediate result files (avoiding memory issues)</small>
+- <small>Break records into sentences - yielded `r length(readLines("./data/en_US.blogs.sentences.txt.gz"))` blog sentences, `r length(readLines("./data/en_US.news.sentences.txt.gz"))` news sentences, and `r length(readLines("./data/en_US.twitter.sentences.txt.gz"))` twitter sentences</small>
+- <small>Process sentences by lower-casing, stripping punctuation and invalid characters, numbers, and profanity, yielding string of words with single space between each token</small>
+- <small>Produce N-grams from sentences (2-grams through 6-grams), doing stem word processing on all but the last word of each N-gram (to prevent stem processing from corrupting the word predicted by the N-1 words before). Accumulate all N-grams into files corresponding to the N value</small>
+- <small>Produce frequency data for each N-gram by counting duplicate lines the corresponding N-gram files</small>
+
+Reducing the Frequency Data
+========================================================
+- <small>Discarding all frequency=1 N-grams proved an effective way to reduce both the size and 'noise' in the sample data while preserving meaningful (non-unique) training data</small>
+- <small>Ordering all records with the same N-1 prediction tokens in descending order, and then discarding sequences beyond the top 20 further pruned the data (with no loss of prediction accuracy)</small>
+- <small>Identifying all unique words by index numbers, further compacted the database by allowing all N-gram sequences to be stored as sequence of N integers</small>
+- <small>Storing all remaining records, along with a unique word lookup table, into a SQLite database with appropriate indexing, allowed the whole model to be used with a minimum of resident memory usage and processing time during prediction</small>
+
+Final Model Result
+========================================================
+- <small>Shiny application allowed prediction of top 20 matching words (shown in word cloud), along with top 3 words, using a `r round(file.size('./ShinyApp/freqTable.db')/1024/1024,2)` MB database (gz compressed to `r round(file.size('./data/freqTable.db.gz')/1024/1024,2)` MB)</small>
+- <small>Prediction supports handling mixed case, punctuated sentences - text is cleaned in same way as training data</small>
+- <small>Prediction Shiny application uses less than 50MB of memory, and runs in under 0.02 second for most provided text</small>
+- <small>Production database for only top 3 predictions is only `r round(file.size('./data/freqTable3.db')/1024/1024,2)` MB (`r round(file.size('./data/freqTable3.db.gz')/1024/1024,2)` MB compressed), and minimal database (with only best predictions for given N-gram) is only `r round(file.size('./data/freqTable1.db')/1024/1024,2)` MB (`r round(file.size('./data/freqTable1.db.gz')/1024/1024,2)` MB compressed)</small>
+- <small>Final model scored 60% on quiz data - likely due to keeping 'stop words' (helps smaller sentences) versus discarding them (helps longer sentences)</small>
